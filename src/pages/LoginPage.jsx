@@ -1,10 +1,8 @@
-import '../styles/LoginPage.css'; // Import CSS
-
+import "../styles/LoginPage.css"; // Import CSS
 
 const LoginPage = () => {
   return (
     <>
-
       {/* Background circles */}
       <div aria-hidden="true" className="circle circle1"></div>
       <div aria-hidden="true" className="circle circle2"></div>
@@ -13,60 +11,68 @@ const LoginPage = () => {
       <div className="container" role="main">
         <div className="main-content">
           {/* Logo */}
-          <div className="logo-wrapper" aria-label="Pgass International logo">
+          <div className="logo-wrapper" aria-label="Pgas International logo">
             <img
               src="/pti.png"
-              alt="Logo with colorful circular swirl and text 'Pgas international' in center, vibrant colors including purple, green, orange"
+              alt="PTI Logo"
               onError={(e) => {
                 e.currentTarget.src =
                   "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
               }}
             />
             {/* Top icon badge */}
-            <div className="icon-badge icon-top" aria-hidden="true" title="Passport icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M12 2C6.48 2 2 5.58 2 10c0 2.63 1.93 4.88 5 5.83v3.34a1 1 0 0 0 1.55.83L12 18l3.45 1.99a1 1 0 0 0 1.55-.83v-3.34c3.07-.95 5-3.2 5-5.83 0-4.42-4.48-8-10-8zm0 14a7 7 0 0 1-7-7c0-3.1 3.58-5.58 7-5.58S19 5.9 19 9a7 7 0 0 1-7 7z" />
-                <path d="M12 6a3 3 0 0 0 0 6 3 3 0 0 0 0-6zm0 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
-              </svg>
+            <div
+              className="icon-badge icon-top"
+              aria-hidden="true"
+              title="Passport icon"
+            >
+              <img
+                src="/passport.png"
+                alt="Passport Logo"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
+                }}
+              />
             </div>
             {/* Bottom icon badge */}
-            <div className="icon-badge icon-bottom" aria-hidden="true" title="Airplane icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M21 16v-2l-8-5V3.5a.5.5 0 0 0-1 0V9l-8 5v2l8-2.5V21l-2 1v1l4-1 4 1v-1l-2-1v-7.5l8 2.5z" />
-              </svg>
+            <div
+              className="icon-badge icon-bottom"
+              aria-hidden="true"
+              title="Airplane icon"
+            >
+              <img
+                src="/airplane.png"
+                alt="Airplane Logo"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
+                }}
+              />
             </div>
           </div>
 
           {/* Login Box */}
           <section className="login-box" aria-label="Login form">
             <header className="login-header">
-              <svg
-                aria-hidden="true"
-                focusable="false"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-              >
-                <path d="M21 16v-2l-8-5V3.5a.5.5 0 0 0-1 0V9l-8 5v2l8-2.5V21l-2 1v1l4-1 4 1v-1l-2-1v-7.5l8 2.5z" />
-              </svg>
+              <img
+                src="/airplane2.png"
+                alt="Airplane Logo"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
+                }}
+              />
               <div>
-                <div>
-                  AssignGO
-                </div>
+                <div>AssignGO</div>
                 <small>Business Travel Management System</small>
               </div>
             </header>
 
-            <form className="login-content" onSubmit={(e) => e.preventDefault()}>
+            <form
+              className="login-content"
+              onSubmit={(e) => e.preventDefault()}
+            >
               <div className="form-row">
                 <label htmlFor="email">Email</label>
                 <div className="input-icon">
@@ -119,20 +125,24 @@ const LoginPage = () => {
                   <input type="checkbox" id="remember-me" name="remember-me" />
                   Remember me
                 </label>
-                <a href="#forgot-password" className="forgot-password" tabIndex={0}>
+                <a
+                  href="#forgot-password"
+                  className="forgot-password"
+                  tabIndex={0}
+                >
                   Forgot password?
                 </a>
               </div>
 
               <button type="submit" className="btn-login" aria-label="Login">
-                <svg
-                  aria-hidden="true"
-                  focusable="false"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M10 17l5-5-5-5v10zM5 19h2v-14H5v14z" />
-                </svg>
+                <img
+                  src="/login.png"
+                  alt="Airplane Logo"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
+                  }}
+                />
                 Login
               </button>
             </form>
@@ -140,7 +150,10 @@ const LoginPage = () => {
         </div>
 
         {/* Language selector */}
-        <div className="language-selector" aria-label="Language selector English">
+        <div
+          className="language-selector"
+          aria-label="Language selector English"
+        >
           <svg
             aria-hidden="true"
             focusable="false"

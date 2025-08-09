@@ -80,12 +80,11 @@
         .icon-badge {
           width: 48px;
           height: 48px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6b56fd 0%, #a840fd 100%);
+          border-radius: 60%;
+          background: linear-gradient(135deg, #6b56fd 0%, #ad6fe0 100%);
           color: white;
           display: flex;
           justify-content: center;
-          align-items: center;
           box-shadow: 0 6px 12px rgba(107, 86, 253, 0.4);
           position: absolute;
           font-size: 22px;
@@ -101,6 +100,12 @@
           right: -14px;
           border: 4px solid white;
         }
+        .icon-badge img {
+  width: 70%;   /* 80% dari lebar div pembungkusnya */
+  height: auto; /* menjaga proporsi */
+  display: block;
+  margin: 0 auto; /* biar tetap di tengah badge */
+}
         /* Main login box */
         .login-box {
           background: white;
@@ -124,9 +129,8 @@
           user-select: none;
         }
         /* Custom SVG airplane icon in header */
-        .login-header svg {
-          width: 28px;
-          height: 28px;
+        .login-header img {
+          width: 60px;
           fill: currentColor;
           flex-shrink: 0;
         }
@@ -238,7 +242,7 @@
           background: #5b46d8;
         }
         /* Button Icon */
-        .btn-login svg {
+        .btn-login img {
           width: 20px;
           height: 20px;
           fill: currentColor;
