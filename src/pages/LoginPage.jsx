@@ -1,14 +1,72 @@
 import "../styles/LoginPage.css"; // Import CSS
+import { useState, useEffect } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../lib/firebase";
+import { useLocation, useNavigate, Navigate } from "react-router-dom";
+import { useAuthState } from "../hooks/useAuthState"; 
+
+
 
 const LoginPage = () => {
+    const { state } = useLocation();
+    // const [errorMsg, setErrorMsg] = useState(state?.msg ?? "");
+    const [loading, setLoading] = useState(false);
+    const [errMsg, setErrMsg] = useState("");
+    const navigate = useNavigate();
+    const { user, loading: authLoading } = useAuthState();
+    const initialBanner =
+  state?.reason === "logout" ? "" : (state?.msg ?? "");
+  
+  const [errorMsg, setErrorMsg] = useState(initialBanner);
+    // Clear history state so the banner doesn't reappear on refresh/back
+    useEffect(() => {
+      if (state?.msg) {
+        navigate("/login", { replace: true, state: null });
+      }
+    }, [state, navigate]);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setErrMsg("");
+    setErrorMsg("");
+    setLoading(true);
+    const email = e.currentTarget.email.value.trim();
+    const password = e.currentTarget.password.value;
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate("/dashboard"); // sukses → ke dashboard
+    } catch (err) {
+      const m = String(err.code || err.message);
+      if (
+        m.includes("auth/invalid-credential") ||
+        m.includes("auth/wrong-password")
+      )
+        setErrMsg("Email atau password salah.");
+      else if (m.includes("auth/user-not-found"))
+        setErrMsg("Akun tidak ditemukan.");
+      else if (m.includes("auth/too-many-requests"))
+        setErrMsg("Terlalu banyak percobaan. Coba lagi nanti.");
+      else setErrMsg("Login Failed, try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Avoid flicker: don't render login page until auth status known
+  if (authLoading) return null; // or a small loader component
+
+  // If already logged in, never render LoginPage — go to dashboard
+  if (user) return <Navigate to="/dashboard" replace />;
+
   return (
     <>
-      {/* Background circles */}
-      <div aria-hidden="true" className="circle circle1"></div>
-      <div aria-hidden="true" className="circle circle2"></div>
-      <div aria-hidden="true" className="circle circle3"></div>
-
       <div className="container" role="main">
+        {/* Background circles */}
+        <div aria-hidden="true" className="circle circle1"></div>
+        <div aria-hidden="true" className="circle circle2"></div>
+        <div aria-hidden="true" className="circle circle3"></div>
+
         <div className="main-content">
           {/* Logo */}
           <div className="logo-wrapper" aria-label="Pgas International logo">
@@ -69,10 +127,7 @@ const LoginPage = () => {
               </div>
             </header>
 
-            <form
-              className="login-content"
-              onSubmit={(e) => e.preventDefault()}
-            >
+            <form className="login-content" onSubmit={handleLogin}>
               <div className="form-row">
                 <label htmlFor="email">Email</label>
                 <div className="input-icon">
@@ -84,6 +139,7 @@ const LoginPage = () => {
                     autoComplete="email"
                     aria-required="true"
                     aria-describedby="email-desc"
+                    onChange={() => errorMsg && setErrorMsg("")}
                   />
                   <svg
                     aria-hidden="true"
@@ -107,6 +163,7 @@ const LoginPage = () => {
                     autoComplete="current-password"
                     aria-required="true"
                     aria-describedby="password-desc"
+                    onChange={() => errorMsg && setErrorMsg("")}
                   />
                   <svg
                     aria-hidden="true"
@@ -119,6 +176,12 @@ const LoginPage = () => {
                   </svg>
                 </div>
               </div>
+
+              {(errMsg || errorMsg) && (
+                <div className="error-box" role="alert" aria-live="assertive">
+                  {errMsg || errorMsg}
+                </div>
+              )}
 
               <div className="checkbox-row">
                 <label htmlFor="remember-me">
@@ -134,16 +197,28 @@ const LoginPage = () => {
                 </a>
               </div>
 
-              <button type="submit" className="btn-login" aria-label="Login">
-                <img
-                  src="/login.png"
-                  alt="Airplane Logo"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      "https://placehold.co/180x180/png?text=Logo+Image+Not+Found";
-                  }}
-                />
-                Login
+              <button
+                type="submit"
+                className="btn-login"
+                aria-label="Login"
+                disabled={loading}
+              >
+                {loading ? (
+                  <span className="btn-loading">Logging in…</span>
+                ) : (
+                  <>
+                    <img
+                      src="/login.png"
+                      alt=""
+                      aria-hidden="true"
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          "https://placehold.co/24x24/png?text=⏩";
+                      }}
+                    />
+                    Login
+                  </>
+                )}
               </button>
             </form>
           </section>
