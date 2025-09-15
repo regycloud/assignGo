@@ -2,25 +2,44 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Maintenance from "./pages/Maintenance";
+import DashboardPenugasanForm from "./pages/DashboardPenugasanForm";
+import Forbidden403 from "./pages/Forbidden403";
+import NoRolePage from "./pages/NoRolePage";
+import AppLayout from "../layouts/AppLayout";
+import NotFound404 from "./pages/NotFound404";
+import DevSeedPenugasan from "./pages/DevSeedPenugasan";
 
 
-function App() {
+export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/maintenance" element={<Maintenance />} />
+      {/* public */}
       <Route path="/login" element={<LoginPage />} />
+
+      {/* protected area with layout */}
       <Route
-        path="/dashboard"
+        path="/home"
         element={
-          <ProtectedRoute>
-            <Dashboard />
+          <ProtectedRoute allow={["admin", "pic", "staff"]}>
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        {/* index = /app */}
+        <Route index element={<Dashboard />} />
+        {/* nested pages */}
+        <Route path="penugasan/new" element={<DashboardPenugasanForm />} />
+        {/* contoh halaman khusus admin:
+        <Route path="admin" element={
+          <ProtectedRoute allow={["admin"]}><AdminPage/></ProtectedRoute>
+        }/> */}
+      </Route>
+
+      {/* fallbacks */}
+      <Route path="/403" element={<Forbidden403 />} />
+      <Route path="/no-role" element={<NoRolePage />} />
+      <Route path="/home/dev/seed" element={<DevSeedPenugasan />} />
+      <Route path="*" element={<NotFound404 />} />
     </Routes>
   );
 }
-
-export default App;
