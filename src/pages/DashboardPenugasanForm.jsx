@@ -1,445 +1,294 @@
-// src/pages/DashboardPenugasanForm.jsx
-import { useEffect, useMemo, useState } from "react";
+// src/pages/NewTripForm.jsx
+import { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "../lib/firebase";
-import { auth } from "../lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-export default function DashboardPenugasanForm() {
-  const [currentUser, setCurrentUser] = useState(null);
+export default function NewTripForm() {
+  const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  // prefill assigned_name dari users/{uid}.displayName jika ada
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setCurrentUser(u));
-    return () => unsub();
-  }, [])
-  const [form, setForm] = useState({
-    pekerjaPenempatan: "",
-    proyek: "",
-    satuanKerja: "",
-    nip: "",
-    namaPekerja: "",
-    golonganPerjalanan: "",
-    tglBerangkat: "",
-    tglKembali: "",
-    jumlahHari: 0, // auto
-    tempatKedudukan: "",
-    lokasiPenugasan: "",
-    deskripsiTujuan: "",
-    kategoriPerjalanan: "", // "Dalam Negeri" | "Khusus" | "Luar Negeri"
-    jenisUmum: "", // untuk kategori "Dalam Negeri" atau "Luar Negeri" jika dianggap umum
-    jenisKhusus: "", // untuk kategori "Khusus"
-    transportKeBandaraKeberangkatan: "", // "Sendiri" | "Kendaraan Dinas/Operasional"
-    transportKeBandaraKedatangan: "",
-    saranaTransportasi: "", // "PU" | "KA" | "TUD" | "KL"
-    saranaTransportasiTujuan: "", // "Penugasan = Penginapan" | "Mengatur Sendiri" | "Kendaraan Dinas / Operasional" | "Sewa Kendaraan"
+    const u = auth.currentUser;
+    if (!u) return;
+    getDoc(doc(db, "users", u.uid)).then((snap) => {
+      if (snap.exists()) {
+        const n = snap.data().displayName || "";
+        setF((s) => ({ ...s, assigned_name: n || s.assigned_name }));
+      }
+    });
+  }, []);
+
+  const [f, setF] = useState({
+    number: "",
+    assigned_name: "",
+    position: "",
+    rank_position: "",
+    base_location: "",
+    assignment_destination: "",
+    trip_type: "KDU",
+    trip_category: "",
+    depart_date: "",
+    return_date: "",
+    purpose: "",
+    main_transport: "",
+    local_transport: "",
+    transport_to_departure_terminal: "",
+    transport_to_arrival_terminal: "",
+    daily_expense_type: "",
+    authorizing_officer: "",
   });
 
-  const [error, setError] = useState("");
+  const onChange = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
+  // auto hitung trip_days
+  const tripDays = useMemo(() => {
+    if (!f.depart_date || !f.return_date) return 0;
+    const a = new Date(f.depart_date);
+    const b = new Date(f.return_date);
+    if (isNaN(a) || isNaN(b) || b < a) return 0;
+    const days = Math.ceil((b - a) / (1000 * 60 * 60 * 24));
+    return Math.max(1, days);
+  }, [f.depart_date, f.return_date]);
 
-  // Hitung jumlah hari otomatis saat tanggal berubah
-  useEffect(() => {
-    if (!form.tglBerangkat || !form.tglKembali) return;
-    const start = new Date(form.tglBerangkat);
-    const end = new Date(form.tglKembali);
-
-    if (end < start) {
-      setError("Tanggal kembali tidak boleh lebih awal dari tanggal berangkat.");
-      setForm((f) => ({ ...f, jumlahHari: 0 }));
-      return;
-    }
-    setError("");
-
-    const ms = end - start; // selisih milidetik
-    // Konversi ke hari dibulatkan ke atas (minimal 1 jika punya selisih > 0)
-    const days = Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)) || 1);
-    setForm((f) => ({ ...f, jumlahHari: days }));
-  }, [form.tglBerangkat, form.tglKembali]);
-
-  // Helpers
-  const disabledUmum = useMemo(
-    () => form.kategoriPerjalanan !== "Dalam Negeri" && form.kategoriPerjalanan !== "Luar Negeri",
-    [form.kategoriPerjalanan]
-  );
-  const disabledKhusus = useMemo(
-    () => form.kategoriPerjalanan !== "Khusus",
-    [form.kategoriPerjalanan]
-  );
-
-  const onChange = (key) => (e) => {
-    const value = e?.target?.value ?? e;
-    setForm((f) => ({ ...f, [key]: value }));
-  };
-
-    const onSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    setErr("");
 
-    // Validasi minimum
-    if (!form.nip || !form.namaPekerja || !form.kategoriPerjalanan) {
-      setError("Mohon lengkapi NIP, Nama Pekerja, dan Kategori Perjalanan.");
+    // validasi minimal sesuai field wajib
+    if (!f.number || !f.assigned_name || !f.assignment_destination) {
+      setErr("Nomor, Nama yang ditugaskan, dan Tujuan wajib diisi.");
       return;
     }
-    if (!form.tglBerangkat || !form.tglKembali) {
-      setError("Mohon isi Tanggal Berangkat dan Tanggal Kembali.");
+    if (!f.depart_date || !f.return_date) {
+      setErr("Tanggal berangkat & kembali wajib diisi.");
       return;
     }
-    if (new Date(form.tglKembali) < new Date(form.tglBerangkat)) {
-      setError("Tanggal kembali tidak boleh lebih awal dari tanggal berangkat.");
+    const d1 = new Date(f.depart_date);
+    const d2 = new Date(f.return_date);
+    if (d2 < d1) {
+      setErr("Tanggal kembali tidak boleh lebih awal dari tanggal berangkat.");
       return;
     }
-    setError("");
+
     setSaving(true);
-
     try {
+      // payload mengikuti koleksi trips yang kamu kirim
       const payload = {
-        // --- field sesuai form ---
-        pekerjaPenempatan: form.pekerjaPenempatan?.trim() || "",
-        proyek: form.proyek?.trim() || "",
-        satuanKerja: form.satuanKerja?.trim() || "",
-        nip: form.nip?.trim() || "",
-        namaPekerja: form.namaPekerja?.trim() || "",
-        golonganPerjalanan: form.golonganPerjalanan?.trim() || "",
-        // Simpan sebagai Date (SDK akan konversi ke Timestamp Firestore)
-        tglBerangkat: new Date(form.tglBerangkat),
-        tglKembali: new Date(form.tglKembali),
-        jumlahHari: form.jumlahHari || 0,
-        tempatKedudukan: form.tempatKedudukan?.trim() || "",
-        lokasiPenugasan: form.lokasiPenugasan?.trim() || "",
-        deskripsiTujuan: form.deskripsiTujuan?.trim() || "",
-        kategoriPerjalanan: form.kategoriPerjalanan || "",
-        jenisPerjalananUmum: form.kategoriPerjalanan !== "Khusus" ? (form.jenisUmum || "") : "",
-        jenisPerjalananKhusus: form.kategoriPerjalanan === "Khusus" ? (form.jenisKhusus || "") : "",
-        transportKeBandara: {
-          keberangkatan: form.transportKeBandaraKeberangkatan || "",
-          kedatangan: form.transportKeBandaraKedatangan || "",
-        },
-        saranaTransportasi: form.saranaTransportasi || "",
-        saranaTransportasiTujuan: form.saranaTransportasiTujuan || "",
-
-        // --- meta ---
+        number: f.number.trim(),
+        assigned_name: f.assigned_name.trim(),
+        position: f.position.trim(),
+        rank_position: f.rank_position.trim(),
+        base_location: f.base_location.trim(),
+        assignment_destination: f.assignment_destination.trim(),
+        trip_type: f.trip_type || "",
+        trip_category: f.trip_category || "",
+        depart_date: new Date(f.depart_date), // Timestamp oleh SDK
+        return_date: new Date(f.return_date),
+        trip_days: tripDays,
+        purpose: f.purpose.trim(),
+        main_transport: f.main_transport || "",
+        local_transport: f.local_transport || "",
+        transport_to_departure_terminal: f.transport_to_departure_terminal || "",
+        transport_to_arrival_terminal: f.transport_to_arrival_terminal || "",
+        daily_expense_type: f.daily_expense_type || "",
+        authorizing_officer: f.authorizing_officer.trim(),
+        date: new Date(),            // untuk sorting di dashboard (field 'date' yg ada di data kamu)
         createdAt: serverTimestamp(),
-        createdBy: currentUser?.uid || null,
-        status: "draft", // kamu bisa ganti ke 'submitted' kalau mau
+        createdBy: auth.currentUser?.uid || null,
       };
 
-      const ref = await addDoc(collection(db, "penugasan"), payload);
-      setSavedId(ref.id);
-
-      // reset form (opsional)
-      // setForm({ ...defaultState });
-
-      alert(`Berhasil disimpan! ID: ${ref.id}`);
-    } catch (err) {
-      console.error(err);
-      setError("Gagal menyimpan ke Firestore. Coba lagi.");
+      const ref = await addDoc(collection(db, "trips"), payload);
+      navigate(`/home/trips/${ref.id}`, { replace: true });
+    } catch (e2) {
+      console.error(e2);
+      setErr("Gagal menyimpan. Cek koneksi / Auth / Firestore Rules.");
     } finally {
       setSaving(false);
     }
   };
 
-  // UI kecil & rapi tanpa lib eksternal
-  const section = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16 };
-  const label = { display: "block", fontSize: 14, fontWeight: 600, marginBottom: 6 };
+  // styling kecil
+  const section = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16, background: "#fff" };
+  const label = { display: "block", fontWeight: 600, fontSize: 13, marginBottom: 6 };
   const input = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #d1d5db" };
-  const radioWrap = { display: "flex", gap: 16, flexWrap: "wrap" };
-  const row = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 };
-  const header = { fontSize: 18, fontWeight: 700, margin: "8px 0 12px" };
+  const row2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 };
+  const header = { fontSize: 16, fontWeight: 800, marginBottom: 10 };
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>
-        Form Penugasan / Perjalanan Dinas
-      </h1>
-      <p style={{ color: "#6b7280", marginBottom: 20 }}>
-        Isi data berikut. <i>Jumlah Hari</i> dihitung otomatis dari rentang tanggal.
-      </p>
-
-      <form onSubmit={onSubmit}>
-        {/* Identitas & Penempatan */}
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 16 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Penugasan Baru (Trips)</h1>
+      <form onSubmit={submit}>
         <div style={section}>
-          <div style={header}>Identitas & Penempatan</div>
-          <div style={row}>
+          <div style={header}>Identitas</div>
+          <div style={row2}>
             <div>
-              <label style={label}>Pekerja Penempatan</label>
-              <input style={input} value={form.pekerjaPenempatan} onChange={onChange("pekerjaPenempatan")} placeholder="Contoh: Divisi Operasional" />
+              <label style={label}>Nomor Dokumen</label>
+              <input style={input} value={f.number} onChange={onChange("number")} placeholder="XXX" />
             </div>
             <div>
-              <label style={label}>Proyek</label>
-              <input style={input} value={form.proyek} onChange={onChange("proyek")} placeholder="Contoh: Proyek A" />
-            </div>
-          </div>
-
-          <div style={{ height: 12 }} />
-
-          <div style={row}>
-            <div>
-              <label style={label}>Satuan Kerja</label>
-              <input style={input} value={form.satuanKerja} onChange={onChange("satuanKerja")} placeholder="Satuan Kerja" />
-            </div>
-            <div>
-              <label style={label}>NIP</label>
-              <input style={input} value={form.nip} onChange={onChange("nip")} placeholder="Nomor Induk Pegawai" />
+              <label style={label}>Nama yang Ditugaskan</label>
+              <input style={input} value={f.assigned_name} onChange={onChange("assigned_name")} placeholder="Name" />
             </div>
           </div>
 
           <div style={{ height: 12 }} />
-
-          <div style={row}>
+          <div style={row2}>
             <div>
-              <label style={label}>Nama Pekerja yang diperintah</label>
-              <input style={input} value={form.namaPekerja} onChange={onChange("namaPekerja")} placeholder="Nama lengkap" />
+              <label style={label}>Jabatan (Position)</label>
+              <input style={input} value={f.position} onChange={onChange("position")} placeholder="Finance Manager" />
             </div>
             <div>
-              <label style={label}>Golongan Perjalanan Dinas</label>
-              <input style={input} value={form.golonganPerjalanan} onChange={onChange("golonganPerjalanan")} placeholder="Golongan/Grade" />
+              <label style={label}>Pangkat/Golongan (Rank)</label>
+              <input style={input} value={f.rank_position} onChange={onChange("rank_position")} placeholder="-" />
+            </div>
+          </div>
+
+          <div style={{ height: 12 }} />
+          <div style={row2}>
+            <div>
+              <label style={label}>Tempat Kedudukan (Base)</label>
+              <input style={input} value={f.base_location} onChange={onChange("base_location")} placeholder="Jakarta" />
+            </div>
+            <div>
+              <label style={label}>Tujuan Penugasan (Destination)</label>
+              <input style={input} value={f.assignment_destination} onChange={onChange("assignment_destination")} placeholder="Bali" />
             </div>
           </div>
         </div>
 
-        {/* Jadwal */}
         <div style={section}>
-          <div style={header}>Jadwal Perjalanan</div>
-          <div style={row}>
+          <div style={header}>Kategori & Jadwal</div>
+          <div style={row2}>
+            <div>
+              <label style={label}>Jenis Perjalanan (Trip Type)</label>
+              <select style={input} value={f.trip_type} onChange={onChange("trip_type")}>
+                <option value="KDU">KDU</option>
+                <option value="RAPAT">RAPAT</option>
+                <option value="DIKLAT">DIKLAT</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Kategori (Trip Category)</label>
+              <input style={input} value={f.trip_category} onChange={onChange("trip_category")} placeholder="3" />
+            </div>
+          </div>
+
+          <div style={{ height: 12 }} />
+          <div style={row2}>
             <div>
               <label style={label}>Tanggal Berangkat</label>
-              <input type="datetime-local" style={input} value={form.tglBerangkat} onChange={onChange("tglBerangkat")} />
+              <input type="datetime-local" style={input} value={f.depart_date} onChange={onChange("depart_date")} />
             </div>
             <div>
               <label style={label}>Tanggal Kembali</label>
-              <input type="datetime-local" style={input} value={form.tglKembali} onChange={onChange("tglKembali")} />
+              <input type="datetime-local" style={input} value={f.return_date} onChange={onChange("return_date")} />
             </div>
           </div>
 
           <div style={{ height: 12 }} />
-
           <div style={{ maxWidth: 240 }}>
-            <label style={label}>Jumlah Hari (auto)</label>
-            <input style={{ ...input, background: "#f3f4f6" }} value={form.jumlahHari} readOnly disabled />
+            <label style={label}>Lama Perjalanan (hari)</label>
+            <input style={{ ...input, background: "#f3f4f6" }} value={tripDays} readOnly disabled />
           </div>
-
-          {error && (
-            <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* Lokasi & Tujuan */}
         <div style={section}>
-          <div style={header}>Lokasi & Tujuan</div>
-          <div style={row}>
+          <div style={header}>Transportasi & Biaya</div>
+          <div style={row2}>
             <div>
-              <label style={label}>Tempat Kedudukan</label>
-              <input style={input} value={form.tempatKedudukan} onChange={onChange("tempatKedudukan")} placeholder="Kota/Unit asal" />
+              <label style={label}>Sarana Transportasi Utama</label>
+              <select style={input} value={f.main_transport} onChange={onChange("main_transport")}>
+                <option value="">- pilih -</option>
+                <option value="Airplane">Airplane</option>
+                <option value="KA">Kereta Api</option>
+                <option value="TUD">Transport Umum Darat</option>
+                <option value="KL">Kapal Laut</option>
+              </select>
             </div>
             <div>
-              <label style={label}>Lokasi Penugasan</label>
-              <input style={input} value={form.lokasiPenugasan} onChange={onChange("lokasiPenugasan")} placeholder="Kota/Unit tujuan" />
+              <label style={label}>Transportasi Lokal</label>
+              <select style={input} value={f.local_transport} onChange={onChange("local_transport")}>
+                <option value="">- pilih -</option>
+                <option value="Rent">Rent</option>
+                <option value="Operasional">Operasional</option>
+                <option value="Self">Self</option>
+              </select>
             </div>
           </div>
 
           <div style={{ height: 12 }} />
-
-          <div>
-            <label style={label}>Deskripsi Tujuan Penugasan</label>
-            <textarea style={{ ...input, minHeight: 90 }} value={form.deskripsiTujuan} onChange={onChange("deskripsiTujuan")} placeholder="Ringkas tujuan penugasan..." />
-          </div>
-        </div>
-
-        {/* Kategori Perjalanan */}
-        <div style={section}>
-          <div style={header}>Kategori Perjalanan Dinas</div>
-          <div style={radioWrap}>
-            {["Dalam Negeri", "Khusus", "Luar Negeri"].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="kategoriPerjalanan"
-                  value={opt}
-                  checked={form.kategoriPerjalanan === opt}
-                  onChange={onChange("kategoriPerjalanan")}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Jenis Perjalanan Dinas - Umum */}
-        <div style={{ ...section, opacity: disabledUmum ? 0.5 : 1 }}>
-          <div style={header}>Jenis Perjalanan Dinas (Umum)</div>
-          <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 8 }}>
-            Aktif bila kategori = Dalam Negeri / Luar Negeri
-          </div>
-          <div style={radioWrap}>
-            {[
-              "Kunjungan Dinas Umum/Rapat Dinas/Dinas Surver",
-              "Pemindahan Permanan/Penugasan Sementara",
-              "Pendidikan dan Pelatihan",
-            ].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="jenisUmum"
-                  value={opt}
-                  disabled={disabledUmum}
-                  checked={form.jenisUmum === opt}
-                  onChange={onChange("jenisUmum")}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Jenis Perjalanan Dinas - Khusus */}
-        <div style={{ ...section, opacity: disabledKhusus ? 0.5 : 1 }}>
-          <div style={header}>Jenis Perjalanan Dinas (Khusus)</div>
-          <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 8 }}>
-            Aktif bila kategori = Khusus
-          </div>
-          <div style={radioWrap}>
-            {[
-              ">= 80km dan menginap",
-              ">= 80km dan tidak menginap",
-              "<= 80 km dan menginap",
-              "<= 80 km dan tidak menginap",
-            ].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="jenisKhusus"
-                  value={opt}
-                  disabled={disabledKhusus}
-                  checked={form.jenisKhusus === opt}
-                  onChange={onChange("jenisKhusus")}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Transportasi ke/di bandara/stasiun/pelabuhan */}
-        <div style={section}>
-          <div style={header}>Transportasi ke Bandara/Stasiun/Terminal/Pelabuhan</div>
-
-          <div style={{ marginBottom: 10, fontWeight: 600 }}>Di tempat keberangkatan:</div>
-          <div style={radioWrap}>
-            {["Sendiri", "Kendaraan Dinas/Operasional"].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="transportKeBandaraKeberangkatan"
-                  value={opt}
-                  checked={form.transportKeBandaraKeberangkatan === opt}
-                  onChange={onChange("transportKeBandaraKeberangkatan")}
-                />
-                {opt}
-              </label>
-            ))}
+          <div style={row2}>
+            <div>
+              <label style={label}>Ke Terminal Keberangkatan</label>
+              <select style={input} value={f.transport_to_departure_terminal} onChange={onChange("transport_to_departure_terminal")}>
+                <option value="">- pilih -</option>
+                <option value="Self">Self</option>
+                <option value="Kendaraan Dinas/Operasional">Kendaraan Dinas/Operasional</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Ke Terminal Kedatangan</label>
+              <select style={input} value={f.transport_to_arrival_terminal} onChange={onChange("transport_to_arrival_terminal")}>
+                <option value="">- pilih -</option>
+                <option value="Self">Self</option>
+                <option value="Kendaraan Dinas/Operasional">Kendaraan Dinas/Operasional</option>
+              </select>
+            </div>
           </div>
 
           <div style={{ height: 12 }} />
-
-          <div style={{ marginBottom: 10, fontWeight: 600 }}>Di tempat kedatangan:</div>
-          <div style={radioWrap}>
-            {["Sendiri", "Kendaraan Dinas/Operasional"].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="transportKeBandaraKedatangan"
-                  value={opt}
-                  checked={form.transportKeBandaraKedatangan === opt}
-                  onChange={onChange("transportKeBandaraKedatangan")}
-                />
-                {opt}
-              </label>
-            ))}
+          <div style={row2}>
+            <div>
+              <label style={label}>Jenis Biaya Harian</label>
+              <select style={input} value={f.daily_expense_type} onChange={onChange("daily_expense_type")}>
+                <option value="">- pilih -</option>
+                <option value="Daily Allowance">Daily Allowance</option>
+                <option value="Lumpsum">Lumpsum</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Pejabat Pemberi Otorisasi</label>
+              <input style={input} value={f.authorizing_officer} onChange={onChange("authorizing_officer")} placeholder="Adhi" />
+            </div>
           </div>
         </div>
 
-        {/* Sarana Transportasi */}
         <div style={section}>
-          <div style={header}>Sarana Transportasi</div>
-          <div style={radioWrap}>
-            {["PU", "KA", "TUD", "KL"].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="saranaTransportasi"
-                  value={opt}
-                  checked={form.saranaTransportasi === opt}
-                  onChange={onChange("saranaTransportasi")}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-          <div style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>
-            Keterangan singkat: PU=Pesawat Udara, KA=Kereta Api, TUD=Transport Umum Darat, KL=Kapal Laut.
-          </div>
+          <div style={header}>Tujuan</div>
+          <label style={label}>Deskripsi Tujuan</label>
+          <textarea style={{ ...input, minHeight: 100 }} value={f.purpose} onChange={onChange("purpose")} placeholder="Rapat koordinasi ..." />
         </div>
 
-        {/* Sarana Transportasi di Tujuan */}
-        <div style={section}>
-          <div style={header}>Sarana Transportasi di Tujuan</div>
-          <div style={radioWrap}>
-            {[
-              "Penugasan = Penginapan",
-              "Mengatur Sendiri",
-              "Kendaraan Dinas / Operasional",
-              "Sewa Kendaraan",
-            ].map((opt) => (
-              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="saranaTransportasiTujuan"
-                  value={opt}
-                  checked={form.saranaTransportasiTujuan === opt}
-                  onChange={onChange("saranaTransportasiTujuan")}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        </div>
+        {err && <div style={{ color: "#b91c1c", marginBottom: 12 }}>{err}</div>}
 
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
             type="button"
-            onClick={() => {
-              setForm({
-                pekerjaPenempatan: "",
-                proyek: "",
-                satuanKerja: "",
-                nip: "",
-                namaPekerja: "",
-                golonganPerjalanan: "",
-                tglBerangkat: "",
-                tglKembali: "",
-                jumlahHari: 0,
-                tempatKedudukan: "",
-                lokasiPenugasan: "",
-                deskripsiTujuan: "",
-                kategoriPerjalanan: "",
-                jenisUmum: "",
-                jenisKhusus: "",
-                transportKeBandaraKeberangkatan: "",
-                transportKeBandaraKedatangan: "",
-                saranaTransportasi: "",
-                saranaTransportasiTujuan: "",
-              });
-              setError("");
-            }}
+            onClick={() =>
+              setF({
+                number: "", assigned_name: "", position: "", rank_position: "",
+                base_location: "", assignment_destination: "",
+                trip_type: "KDU", trip_category: "",
+                depart_date: "", return_date: "", purpose: "",
+                main_transport: "", local_transport: "",
+                transport_to_departure_terminal: "", transport_to_arrival_terminal: "",
+                daily_expense_type: "", authorizing_officer: "",
+              })
+            }
             style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid #d1d5db", background: "#fff" }}
           >
             Reset
           </button>
           <button
             type="submit"
-            style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid #2563eb", background: "#2563eb", color: "#fff" }}
+            disabled={saving}
+            style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid #2563eb", background: "#2563eb", color: "#fff", opacity: saving ? 0.7 : 1 }}
           >
-            Simpan
+            {saving ? "Menyimpan…" : "Simpan"}
           </button>
         </div>
       </form>

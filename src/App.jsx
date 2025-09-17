@@ -8,7 +8,7 @@ import NoRolePage from "./pages/NoRolePage";
 import AppLayout from "../layouts/AppLayout";
 import NotFound404 from "./pages/NotFound404";
 import DevSeedPenugasan from "./pages/DevSeedPenugasan";
-
+import TripDetail from "./pages/TripDetail";
 
 export default function App() {
   return (
@@ -33,6 +33,7 @@ export default function App() {
         <Route path="admin" element={
           <ProtectedRoute allow={["admin"]}><AdminPage/></ProtectedRoute>
         }/> */}
+        <Route path="trips/:id" element={<TripDetail />} />
       </Route>
 
       {/* fallbacks */}

@@ -35,7 +35,7 @@ const LoginPage = () => {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate("/dashboard"); // sukses → ke dashboard
+      navigate("/home"); // sukses → ke dashboard
     } catch (err) {
       const m = String(err.code || err.message);
       if (
@@ -57,7 +57,7 @@ const LoginPage = () => {
   if (authLoading) return null; // or a small loader component
 
   // If already logged in, never render LoginPage — go to dashboard
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to="/home" replace />;
 
   return (
     <>

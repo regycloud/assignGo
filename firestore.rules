@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+
+    match /trips/{id} {
+      allow read: if signedIn();      // user login boleh baca
+      allow create: if signedIn();    // opsional
+      allow update, delete: if false;
+    }
+  }
+}
