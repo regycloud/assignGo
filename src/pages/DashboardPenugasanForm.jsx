@@ -40,6 +40,8 @@ export default function NewTripForm() {
     transport_to_arrival_terminal: "",
     daily_expense_type: "",
     authorizing_officer: "",
+    // >>> baru: scope Domestic/International
+    scope: "Domestic",
   });
 
   const onChange = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -76,7 +78,7 @@ export default function NewTripForm() {
 
     setSaving(true);
     try {
-      // payload mengikuti koleksi trips yang kamu kirim
+      // payload mengikuti koleksi trips + scope baru
       const payload = {
         number: f.number.trim(),
         assigned_name: f.assigned_name.trim(),
@@ -86,7 +88,7 @@ export default function NewTripForm() {
         assignment_destination: f.assignment_destination.trim(),
         trip_type: f.trip_type || "",
         trip_category: f.trip_category || "",
-        depart_date: new Date(f.depart_date), // Timestamp oleh SDK
+        depart_date: new Date(f.depart_date),
         return_date: new Date(f.return_date),
         trip_days: tripDays,
         purpose: f.purpose.trim(),
@@ -96,7 +98,11 @@ export default function NewTripForm() {
         transport_to_arrival_terminal: f.transport_to_arrival_terminal || "",
         daily_expense_type: f.daily_expense_type || "",
         authorizing_officer: f.authorizing_officer.trim(),
-        date: new Date(),            // untuk sorting di dashboard (field 'date' yg ada di data kamu)
+        // >>> baru: simpan scope + turunan boolean
+        scope: f.scope, // "Domestic" | "International"
+        is_international: f.scope === "International",
+
+        date: new Date(),
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser?.uid || null,
       };
@@ -175,6 +181,34 @@ export default function NewTripForm() {
               <label style={label}>Kategori (Trip Category)</label>
               <input style={input} value={f.trip_category} onChange={onChange("trip_category")} placeholder="3" />
             </div>
+          </div>
+
+          {/* >>> baru: radio Domestic/International */}
+          <div style={{ height: 12 }} />
+          <div>
+            <div style={{ ...label, marginBottom: 8 }}>Trip Scope</div>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 16 }}>
+              <input
+                type="radio"
+                name="tripScope"
+                value="Domestic"
+                checked={f.scope === "Domestic"}
+                onChange={() => setF((s) => ({ ...s, scope: "Domestic" }))}
+                required
+              />
+              <span>Domestic</span>
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="radio"
+                name="tripScope"
+                value="International"
+                checked={f.scope === "International"}
+                onChange={() => setF((s) => ({ ...s, scope: "International" }))}
+                required
+              />
+              <span>International</span>
+            </label>
           </div>
 
           <div style={{ height: 12 }} />
@@ -277,6 +311,7 @@ export default function NewTripForm() {
                 main_transport: "", local_transport: "",
                 transport_to_departure_terminal: "", transport_to_arrival_terminal: "",
                 daily_expense_type: "", authorizing_officer: "",
+                scope: "Domestic", // reset default
               })
             }
             style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid #d1d5db", background: "#fff" }}

@@ -13,7 +13,7 @@ export default function Sidebar() {
       </NavLink>
 
       <NavLink to="/home/penugasan/new" style={({ isActive }) => ({ ...item, ...(isActive ? active : {}) })}>
-        Buat Penugasan
+        Create New Trip
       </NavLink>
 
       <div style={{ marginTop: "auto", fontSize: 12, color: "#6b7280", padding: "8px 6px" }}>

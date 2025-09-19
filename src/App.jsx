@@ -9,6 +9,7 @@ import AppLayout from "../layouts/AppLayout";
 import NotFound404 from "./pages/NotFound404";
 import DevSeedPenugasan from "./pages/DevSeedPenugasan";
 import TripDetail from "./pages/TripDetail";
+import TripAmount from "./pages/TripAmount";
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <ProtectedRoute allow={["admin"]}><AdminPage/></ProtectedRoute>
         }/> */}
         <Route path="trips/:id" element={<TripDetail />} />
+        <Route path="trips/:id/amount" element={<TripAmount />} />
       </Route>
 
       {/* fallbacks */}
