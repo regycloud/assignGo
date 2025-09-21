@@ -189,7 +189,7 @@ export default function Dashboard() {
                   <th style={th}>Depart</th>
                   <th style={th}>Return</th>
                   <th style={th}>Days</th>
-                  <th style={th}>Main Transport</th>
+                  <th style={th}>Status</th>
                   <th style={th}>Purpose</th>
                   <th style={th}>Amount</th>
                 </tr>
@@ -214,7 +214,32 @@ export default function Dashboard() {
                       <td style={td}>{fmt(t.depart_date)}</td>
                       <td style={td}>{fmt(t.return_date)}</td>
                       <td style={td}>{t.trip_days ?? "-"}</td>
-                      <td style={td}>{t.main_transport || "-"}</td>
+                      <td style={{ ...td }}>
+                        <span
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color:
+                              t.status_trip_document === "approved" ? "#065f46" :
+                              t.status_trip_document === "draft" ? "#92400e" :
+                              "#1f2937",
+                            background:
+                              t.status_trip_document === "approved" ? "#d1fae5" :
+                              t.status_trip_document === "draft" ? "#fef3c7" :
+                              "#e5e7eb",
+                            border: `1px solid ${
+                              t.status_trip_document === "approved" ? "#10b981" :
+                              t.status_trip_document === "draft" ? "#f59e0b" :
+                              "#9ca3af"
+                            }`,
+                            textTransform: "capitalize"
+                          }}
+                        >
+                          {t.status_trip_document || "-"}
+                        </span>
+                      </td>
                       <td style={{ ...td, maxWidth: 260 }}>
                         <span title={t.purpose || ""}>
                           {t.purpose || "-"}
