@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   doc, getDoc,
   collection, query, orderBy, limit, onSnapshot,
-  where, getCountFromServer, getDocs            // ⬅️ tambahan
+  where, getCountFromServer, getDocs
 } from "firebase/firestore";
 
 export default function Dashboard() {
@@ -27,6 +27,12 @@ export default function Dashboard() {
   const [totalApprovedTrips, setTotalApprovedTrips] = useState(0);
   const [totalDraftTrips, setTotalDraftTrips] = useState(0);
   const [totalApprovedAmount, setTotalApprovedAmount] = useState(0);
+
+  // ==== CHART: Approved vs Budget (2025) ====
+  const YEARLY_BUDGET_2025 = 3_000_000_000; // Rp 3 Miliar
+  const [approved2025, setApproved2025] = useState(0);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartErr, setChartErr] = useState("");
 
   const fmt = (ts) => {
     if (!ts) return "-";
@@ -69,8 +75,8 @@ export default function Dashboard() {
   useEffect(() => {
     setTripsLoading(true);
     setTripsErr("");
-    const q = query(collection(db, "trips"), orderBy("date", "desc"), limit(8));
-    const unsub = onSnapshot(q,
+    const qTrips = query(collection(db, "trips"), orderBy("date", "desc"), limit(8));
+    const unsub = onSnapshot(qTrips,
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setTrips(rows);
@@ -86,7 +92,7 @@ export default function Dashboard() {
     return () => unsub();
   }, []);
 
-  // ==== SUMMARY: counts + sum approved amount ====
+  // ==== SUMMARY: counts + sum approved amount (semua tahun) ====
   const computeSummary = async () => {
     setSumLoading(true);
     setSumErr("");
@@ -108,7 +114,7 @@ export default function Dashboard() {
       const draftCountSnap = await getCountFromServer(qDraft);
       setTotalDraftTrips(draftCountSnap.data().count || 0);
 
-      // total approved amount (sum dari field amount.total_approved_amount)
+      // total approved amount (SEMUA tahun)
       let approvedAmountSum = 0;
       const approvedDocs = await getDocs(qApproved);
       approvedDocs.forEach((d) => {
@@ -117,11 +123,46 @@ export default function Dashboard() {
         if (!Number.isNaN(num)) approvedAmountSum += num;
       });
       setTotalApprovedAmount(approvedAmountSum);
+
+      // sekalian hitung grafik 2025
+      await computeApprovedForYear(2025);
     } catch (e) {
       console.error("computeSummary error:", e);
       setSumErr(e?.message || String(e));
     } finally {
       setSumLoading(false);
+    }
+  };
+
+  // ==== Approved Amount untuk tahun tertentu (dipakai chart 2025) ====
+  const computeApprovedForYear = async (year) => {
+    setChartLoading(true);
+    setChartErr("");
+    try {
+      // gunakan field 'date' yang kamu simpan saat create trip
+      const start = new Date(`${year}-01-01T00:00:00.000Z`);
+      const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+      const tripsCol = collection(db, "trips");
+      const qYearApproved = query(
+        tripsCol,
+        where("status_trip_document", "==", "approved"),
+        where("date", ">=", start),
+        where("date", "<", end)
+      );
+
+      let sum = 0;
+      const docs = await getDocs(qYearApproved);
+      docs.forEach((d) => {
+        const val = d.data()?.amount?.total_approved_amount;
+        const num = typeof val === "number" ? val : Number(val || 0);
+        if (!Number.isNaN(num)) sum += num;
+      });
+      setApproved2025(sum);
+    } catch (e) {
+      console.error("computeApprovedForYear error:", e);
+      setChartErr(e?.message || String(e));
+    } finally {
+      setChartLoading(false);
     }
   };
 
@@ -131,6 +172,9 @@ export default function Dashboard() {
   }, []);
 
   const roleLabel = role ? (role === "pic" ? "PIC" : role) : "no role assigned";
+
+  // nilai untuk chart
+  const pct2025 = YEARLY_BUDGET_2025 > 0 ? Math.min(100, Math.round((approved2025 / YEARLY_BUDGET_2025) * 100)) : 0;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -149,7 +193,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ==== SUMMARY (baru) ==== */}
+      {/* ==== SUMMARY ==== */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
         <SummaryCard title="Total Trips" value={sumLoading ? "…" : totalTrips.toLocaleString("id-ID")} />
         <SummaryCard title="Approved Trips" value={sumLoading ? "…" : totalApprovedTrips.toLocaleString("id-ID")} />
@@ -159,12 +203,50 @@ export default function Dashboard() {
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
           onClick={computeSummary}
-          disabled={sumLoading}
+          disabled={sumLoading || chartLoading}
           style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #2563eb", background: "#2563eb", color: "#fff", cursor: "pointer" }}
         >
-          {sumLoading ? "Refreshing…" : "Refresh Summary"}
+          {(sumLoading || chartLoading) ? "Refreshing…" : "Refresh Summary"}
         </button>
-        {sumErr && <span style={{ color: "#b91c1c" }}>Error: {sumErr}</span>}
+        {(sumErr || chartErr) && <span style={{ color: "#b91c1c" }}>Error: {sumErr || chartErr}</span>}
+      </div>
+
+      {/* ==== CHART: Approved vs Budget 2025 ==== */}
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, background: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, color: "#6b7280", fontWeight: 700 }}>
+              Approved vs Budget (2025)
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900 }}>
+              {chartLoading ? "…" : `Approved: Rp ${approved2025.toLocaleString("id-ID")}`}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>Budget 2025</div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>
+              Rp {YEARLY_BUDGET_2025.toLocaleString("id-ID")}
+            </div>
+          </div>
+        </div>
+
+        {/* progress bar */}
+        <div style={{ height: 14, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
+          <div
+            style={{
+              width: chartLoading ? "0%" : `${pct2025}%`,
+              height: "100%",
+              background: pct2025 < 90 ? "#10b981" : pct2025 < 100 ? "#f59e0b" : "#ef4444",
+              transition: "width 300ms ease"
+            }}
+            title={`${pct2025}% of budget`}
+          />
+        </div>
+
+        <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 12, color: "#374151" }}>
+          <span>{pct2025}% of budget</span>
+          <span>Sisa: Rp {(Math.max(0, YEARLY_BUDGET_2025 - approved2025)).toLocaleString("id-ID")}</span>
+        </div>
       </div>
 
       {tripsErr && <div style={{ color:"#b91c1c", padding:8 }}>Error: {tripsErr}</div>}

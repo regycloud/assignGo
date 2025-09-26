@@ -2,22 +2,102 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
+    // ===== Helpers =====
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Ambil role dari users/{uid}.role; fallback ke roleDisplay; jika tidak ada -> null.
     function userRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleDisplay;
+      return signedIn()
+        ? (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+              ? (
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != null
+                    ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+                    : (
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleDisplay != null
+                          ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleDisplay
+                          : null
+                      )
+                )
+              : null
+          )
+        : null;
     }
 
+    function isAdmin() { return userRole() == 'admin'; }
+    function isBod()   { return userRole() == 'bod'; }
+    function isPic()   { return userRole() == 'pic'; }
+
+    // BOD hanya boleh mengubah field status*
+    function onlyStatusChanged() {
+      return request.resource.data
+        .diff(resource.data)
+        .changedKeys()
+        .hasOnly(['status_trip_document', 'status_updated_at', 'status_updated_by']);
+    }
+
+    // Hanya subtree "amount" yang berubah (PIC boleh kelola amount)
+    function onlyAmountChanged() {
+      return request.resource.data
+        .diff(resource.data)
+        .changedKeys()
+        .hasOnly(['amount']);
+    }
+
+    // Daftar field yang boleh diedit PIC (selain amount & status)
+    function picEditableKeys() {
+      return [
+        'number','assigned_name','position','rank_position','base_location',
+        'assignment_destination','trip_type','trip_category',
+        'depart_date','return_date','trip_days','purpose',
+        'main_transport','local_transport',
+        'transport_to_departure_terminal','transport_to_arrival_terminal',
+        'daily_expense_type','authorizing_officer','date','international',
+        'createdAt','createdBy'
+      ];
+    }
+
+    function onlyPicFieldsChanged() {
+      return request.resource.data
+        .diff(resource.data)
+        .changedKeys()
+        .hasOnly(picEditableKeys());
+    }
+
+    // PIC hanya boleh edit dokumen yang ia buat
+    function createdBySelf() {
+      return resource.data.createdBy == request.auth.uid;
+    }
+
+    // ===== users =====
     match /users/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      // baca profil sendiri; admin boleh baca siapa saja
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // tulis profil sendiri; admin boleh tulis siapa saja
+      allow create, update: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      allow delete: if false;
     }
 
+    // ===== trips =====
     match /trips/{id} {
+      // semua yang login boleh lihat & membuat trip
       allow read: if signedIn();
       allow create: if signedIn();
 
-      // TANPA pembatasan field; hanya role yg dibatasi
-      allow update: if signedIn() && (userRole() in ['admin', 'pic', 'accessor']);
+      // Update diatur per-role:
+      allow update: if signedIn() && (
+        isAdmin() ||                                     // admin bebas
+        (isBod() && onlyStatusChanged()) ||              // BOD hanya status*
+        (isPic() && createdBySelf() &&                   // PIC hanya dokumen miliknya
+          (onlyPicFieldsChanged() || onlyAmountChanged())
+        )
+      );
 
+      // Tidak boleh delete dari client
       allow delete: if false;
     }
   }

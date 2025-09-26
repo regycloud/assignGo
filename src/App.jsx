@@ -15,13 +15,14 @@ export default function App() {
   return (
     <Routes>
       {/* public */}
+      <Route path="/" element={<Navigate to="/home" replace />} />
       <Route path="/login" element={<LoginPage />} />
 
       {/* protected area with layout */}
       <Route
         path="/home"
         element={
-          <ProtectedRoute allow={["admin", "pic", "staff"]}>
+          <ProtectedRoute allow={["admin", "pic", "bod"]}>
             <AppLayout />
           </ProtectedRoute>
         }
