@@ -22,7 +22,6 @@ const toInputDT = (val) => {
   if (!val) return "";
   const d = val?.toDate ? val.toDate() : new Date(val);
   if (Number.isNaN(d.getTime())) return "";
-  // YYYY-MM-DDTHH:mm (tanpa detik)
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
@@ -36,6 +35,15 @@ const calcDays = (depart, ret) => {
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a) return 0;
   const days = Math.ceil((b - a) / (1000 * 60 * 60 * 24));
   return Math.max(1, days);
+};
+
+/** tentukan employment type dari id karyawan */
+const inferEmploymentType = (employeeId) => {
+  if (!employeeId) return "Unknown";
+  const first = String(employeeId)[0];
+  if (first === "2") return "TAD";
+  if (first === "0") return "Organik";
+  return "Unknown";
 };
 
 export default function TripDetail() {
@@ -99,7 +107,7 @@ export default function TripDetail() {
         setTrip({ id: snap.id, ...data });
         setHasAmount(Object.prototype.hasOwnProperty.call(data, "amount"));
 
-        // sinkronkan status radio dari dokumen
+        // sinkronkan status
         const st = data.status_trip_document || "draft";
         setStatusVal(st);
 
@@ -114,7 +122,7 @@ export default function TripDetail() {
             assignment_destination: data.assignment_destination || "",
             trip_type: data.trip_type || "",
             trip_category: data.trip_category || "",
-            depart_date: data.depart_date || null,   // simpan apa adanya; convert di input
+            depart_date: data.depart_date || null,
             return_date: data.return_date || null,
             purpose: data.purpose || "",
             main_transport: data.main_transport || "",
@@ -123,8 +131,12 @@ export default function TripDetail() {
             transport_to_arrival_terminal: data.transport_to_arrival_terminal || "",
             daily_expense_type: data.daily_expense_type || "",
             authorizing_officer: data.authorizing_officer || "",
-            // opsional: kalau kamu punya scope domestic/international
-            trip_scope: data.trip_scope || "", // "domestic" | "international" | ""
+            trip_scope: data.trip_scope || "",
+
+            // ====== baru: field untuk responsible employee & employment type
+            responsible_employee_id: data.responsible_employee?.id || "",
+            responsible_employee_name: data.responsible_employee?.name || data.assigned_name || "",
+            employment_type: data.employment_type || inferEmploymentType(data.responsible_employee?.id),
           });
         }
 
@@ -137,9 +149,17 @@ export default function TripDetail() {
       }
     );
     return () => unsub();
-    // sengaja tidak masukkan editTrip ke deps agar form tidak di-overwrite saat sedang edit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // auto perbarui employment_type di form jika ID bertukar
+  useEffect(() => {
+    if (!editTrip) return;
+    setForm((s) => ({
+      ...s,
+      employment_type: inferEmploymentType(s.responsible_employee_id),
+    }));
+  }, [form.responsible_employee_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tripDays = useMemo(() => {
     const d1 = form?.depart_date?.toDate ? form.depart_date.toDate() : form?.depart_date;
@@ -149,6 +169,10 @@ export default function TripDetail() {
 
   const rows = useMemo(() => {
     if (!trip) return [];
+    const employment =
+      trip.employment_type ||
+      inferEmploymentType(trip.responsible_employee?.id) ||
+      "Unknown";
     return [
       ["Number", trip.number],
       ["Assigned Name", trip.assigned_name],
@@ -170,7 +194,9 @@ export default function TripDetail() {
       ["Date (Created)", fmt(trip.date)],
       ["Purpose", trip.purpose],
       ["Status Trip Document", trip.status_trip_document || "draft"],
-      ...(trip.trip_scope ? [["Trip Scope", trip.trip_scope]] : []), // tampilkan jika ada
+      ...(trip.trip_scope ? [["Trip Scope", trip.trip_scope]] : []),
+      // ===== tampilkan Employment Type & Responsible Employee
+      ["Employment Type", employment],
     ];
   }, [trip]);
 
@@ -187,9 +213,7 @@ export default function TripDetail() {
       await setDoc(
         ref,
         {
-          amount: {
-            created_at: serverTimestamp(),
-          },
+          amount: { created_at: serverTimestamp() },
         },
         { merge: true }
       );
@@ -231,7 +255,7 @@ export default function TripDetail() {
     if (!trip) return;
     setForm((s) => ({
       ...s,
-      // pastikan state form terisi terakhir dari trip saat mulai edit
+      // refresh dari trip (antisipasi ada perubahan di backend)
       number: trip.number || "",
       assigned_name: trip.assigned_name || "",
       position: trip.position || "",
@@ -250,12 +274,14 @@ export default function TripDetail() {
       daily_expense_type: trip.daily_expense_type || "",
       authorizing_officer: trip.authorizing_officer || "",
       trip_scope: trip.trip_scope || "",
+      responsible_employee_id: trip.responsible_employee?.id || "",
+      responsible_employee_name: trip.responsible_employee?.name || trip.assigned_name || "",
+      employment_type: trip.employment_type || inferEmploymentType(trip.responsible_employee?.id),
     }));
     setEditTrip(true);
   };
 
   const cancelEdit = () => {
-    // kembalikan form ke nilai trip
     if (trip) {
       setForm({
         number: trip.number || "",
@@ -276,6 +302,8 @@ export default function TripDetail() {
         daily_expense_type: trip.daily_expense_type || "",
         authorizing_officer: trip.authorizing_officer || "",
         trip_scope: trip.trip_scope || "",
+        responsible_employee_id: trip.responsible_employee?.id || "",
+        employment_type: trip.employment_type || inferEmploymentType(trip.responsible_employee?.id),
       });
     }
     setEditTrip(false);
@@ -283,7 +311,6 @@ export default function TripDetail() {
 
   const saveTrip = async () => {
     if (!id) return;
-    // validasi singkat tanggal
     const d1 = form.depart_date?.toDate ? form.depart_date.toDate() : form.depart_date;
     const d2 = form.return_date?.toDate ? form.return_date.toDate() : form.return_date;
     if (!d1 || !d2 || d2 < d1) {
@@ -294,6 +321,18 @@ export default function TripDetail() {
     setSaving(true);
     setErr("");
     try {
+      // siapkan responsible_employee (jika salah satu terisi, simpan sebagai map)
+      let responsible_employee = null;
+      if ((form.responsible_employee_id || "").trim() || (form.responsible_employee_name || "").trim()) {
+        responsible_employee = {
+          id: (form.responsible_employee_id || "").trim() || null,
+          name: (form.responsible_employee_name || "").trim() || null,
+        };
+      }
+      const employment_type = responsible_employee?.id
+        ? inferEmploymentType(responsible_employee.id)
+        : (form.employment_type || "Unknown");
+
       const payload = {
         number: (form.number || "").trim(),
         assigned_name: (form.assigned_name || "").trim(),
@@ -313,7 +352,12 @@ export default function TripDetail() {
         transport_to_arrival_terminal: form.transport_to_arrival_terminal || "",
         daily_expense_type: form.daily_expense_type || "",
         authorizing_officer: (form.authorizing_officer || "").trim(),
-        trip_scope: form.trip_scope || "", // kalau tidak dipakai, boleh dihapus
+        trip_scope: form.trip_scope || "",
+
+        // ====== baru: simpan ke dokumen
+        responsible_employee: responsible_employee,
+        employment_type,
+
         updated_at: serverTimestamp(),
         updated_by: auth.currentUser?.uid || null,
       };
@@ -386,10 +430,9 @@ export default function TripDetail() {
           </table>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
-            
             {/* Identitas */}
             <Section title="Trip Info">
-              {/* Opsional: scope domestic/international jika dipakai di sistem */}
+              {/* Scope */}
               <Gap />
               <div style={{ maxWidth: 360 }}>
                 <div style={label}>Scope Perjalanan</div>
@@ -416,6 +459,7 @@ export default function TripDetail() {
                   </label>
                 </div>
               </div>
+
               <Gap />
               <Row2>
                 <Field label="Nomor Dokumen">
@@ -559,8 +603,42 @@ export default function TripDetail() {
                   />
                 </Field>
               </Row2>
+            </Section>
 
-              
+            {/* Responsible Employee & Employment Type */}
+            <Section title="Responsible Employee">
+              <Row2>
+                <Field label="Employee ID">
+                  <input
+                    style={input}
+                    value={form.responsible_employee_id || ""}
+                    onChange={(e) => setForm({ ...form, responsible_employee_id: e.target.value })}
+                    placeholder="mis. 2120940277"
+                  />
+                </Field>
+              </Row2>
+
+              <Gap />
+              <div>
+                <div style={{ ...label, marginBottom: 8 }}>Employment Type (Auto)</div>
+                <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <input type="radio" name="empType" checked={(form.employment_type || "Unknown") === "TAD"} readOnly disabled />
+                    <span>TAD</span>
+                  </label>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <input type="radio" name="empType" checked={(form.employment_type || "Unknown") === "Organik"} readOnly disabled />
+                    <span>Organik</span>
+                  </label>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <input type="radio" name="empType" checked={(form.employment_type || "Unknown") === "Unknown"} readOnly disabled />
+                    <span>Unknown</span>
+                  </label>
+                </div>
+                <div style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>
+                  Ditentukan otomatis dari ID: awalan <b>2 → TAD</b>, awalan <b>0 → Organik</b>.
+                </div>
+              </div>
             </Section>
 
             {/* Tujuan */}
